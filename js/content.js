@@ -246,10 +246,18 @@ async function scanFans() {
     console.log('🔍 Сканирование фанатов...');
     
     try {
-        // Проверяем, что мы на правильной странице
-        if (!window.location.href.includes('/collections/user-lists/subscribers')) {
-            throw new Error('Не находимся на странице фанатов');
+        // Расширенная проверка URL страницы OnlyFans
+        const url = window.location.href;
+        const isValidPage = url.includes('/my/collections') || 
+                           url.includes('/subscribers') || 
+                           url.includes('/fans') ||
+                           url.includes('onlyfans.com/my');
+        
+        if (!isValidPage) {
+            throw new Error(`Неподдерживаемая страница: ${url}`);
         }
+        
+        console.log('✅ Страница подходит для сканирования');
         
         // Безопасная загрузка фанатов
         await loadAllFansSafely();
@@ -258,6 +266,10 @@ async function scanFans() {
         const fans = await extractFansData();
         
         console.log('👥 Найдено фанатов:', fans.length);
+        
+        if (fans.length === 0) {
+            console.warn('⚠️ Фанаты не найдены, возможно нужно обновить селекторы');
+        }
         
         // Отправляем данные в background script
         await chrome.runtime.sendMessage({
@@ -310,22 +322,98 @@ async function loadAllFansSafely() {
     console.log('✅ Загрузка завершена');
 }
 
-// Простое извлечение данных
+// Простое извлечение данных с улучшенными селекторами
 async function extractFansData() {
-    const fanElements = document.querySelectorAll('.b-users__item.m-fans');
+    // Пробуем разные селекторы для фанатов
+    const fanSelectors = [
+        '.b-users__item.m-fans',
+        '.b-users__item',
+        '[data-user]',
+        '.user-item',
+        '.fan-item'
+    ];
+    
+    let fanElements = [];
+    
+    for (const selector of fanSelectors) {
+        fanElements = document.querySelectorAll(selector);
+        if (fanElements.length > 0) {
+            console.log(`✅ Найдены элементы с селектором: ${selector}`);
+            break;
+        }
+    }
+    
+    if (fanElements.length === 0) {
+        console.warn('⚠️ Элементы фанатов не найдены, проверьте селекторы');
+        return [];
+    }
+    
     const fans = [];
     
-    fanElements.forEach(fanElement => {
+    fanElements.forEach((fanElement, index) => {
         try {
-            const nameElement = fanElement.querySelector('[at-attr="custom_name"]');
-            const handleElement = fanElement.querySelector('[at-attr="user_link"] .g-user-username');
-            const isOnline = fanElement.querySelector('.online_status_class.online') !== null;
+            // Пробуем разные селекторы для имени
+            const nameSelectors = [
+                '[at-attr="custom_name"]',
+                '.g-user-name',
+                '.user-name',
+                '.name',
+                'h3',
+                'h4'
+            ];
             
-            const name = nameElement ? nameElement.textContent.trim() : 'Unknown';
+            let nameElement = null;
+            for (const selector of nameSelectors) {
+                nameElement = fanElement.querySelector(selector);
+                if (nameElement) break;
+            }
+            
+            // Пробуем разные селекторы для username
+            const usernameSelectors = [
+                '[at-attr="user_link"] .g-user-username',
+                '.g-user-username',
+                '.username',
+                '[href*="onlyfans.com/"]'
+            ];
+            
+            let handleElement = null;
+            for (const selector of usernameSelectors) {
+                handleElement = fanElement.querySelector(selector);
+                if (handleElement) break;
+            }
+            
+            // Проверяем онлайн статус
+            const onlineSelectors = [
+                '.online_status_class.online',
+                '.online',
+                '.status-online',
+                '[data-online="true"]'
+            ];
+            
+            let isOnline = false;
+            for (const selector of onlineSelectors) {
+                if (fanElement.querySelector(selector)) {
+                    isOnline = true;
+                    break;
+                }
+            }
+            
+            const name = nameElement ? nameElement.textContent.trim() : `User${index + 1}`;
             let username = 'unknown';
             
             if (handleElement) {
-                username = handleElement.textContent.trim().replace('@', '');
+                const text = handleElement.textContent.trim().replace('@', '');
+                username = text || `user${index + 1}`;
+            } else {
+                // Пытаемся извлечь из href
+                const linkElement = fanElement.querySelector('a[href*="onlyfans.com/"]');
+                if (linkElement) {
+                    const href = linkElement.getAttribute('href');
+                    const match = href.match(/onlyfans\.com\/([^\/\?]+)/);
+                    if (match) {
+                        username = match[1];
+                    }
+                }
             }
             
             fans.push({
@@ -339,7 +427,7 @@ async function extractFansData() {
             });
             
         } catch (error) {
-            // Молча игнорируем ошибки отдельных элементов
+            console.warn(`⚠️ Ошибка обработки фаната ${index}:`, error);
         }
     });
     
@@ -352,51 +440,165 @@ function delay(ms) {
 }
 
 async function findFanElement(username) {
-    const fanElements = document.querySelectorAll('.b-users__item.m-fans');
+    // Пробуем найти фаната разными способами
+    const fanSelectors = [
+        '.b-users__item.m-fans',
+        '.b-users__item', 
+        '[data-user]',
+        '.user-item'
+    ];
     
-    for (const fanElement of fanElements) {
-        const handleElement = fanElement.querySelector('[at-attr="user_link"] .g-user-username');
-        if (handleElement) {
-            const fanUsername = handleElement.textContent.trim().replace('@', '');
-            if (fanUsername === username) {
-                return fanElement;
+    for (const selector of fanSelectors) {
+        const fanElements = document.querySelectorAll(selector);
+        
+        for (const fanElement of fanElements) {
+            // Пробуем разные способы найти username
+            const usernameSelectors = [
+                '[at-attr="user_link"] .g-user-username',
+                '.g-user-username',
+                '.username',
+                'a[href*="onlyfans.com/"]'
+            ];
+            
+            for (const usernameSelector of usernameSelectors) {
+                const handleElement = fanElement.querySelector(usernameSelector);
+                if (handleElement) {
+                    let fanUsername = '';
+                    
+                    if (usernameSelector.includes('href')) {
+                        // Извлекаем из href
+                        const href = handleElement.getAttribute('href');
+                        const match = href.match(/onlyfans\.com\/([^\/\?]+)/);
+                        if (match) {
+                            fanUsername = match[1];
+                        }
+                    } else {
+                        // Извлекаем из текста
+                        fanUsername = handleElement.textContent.trim().replace('@', '');
+                    }
+                    
+                    if (fanUsername === username) {
+                        console.log(`✅ Найден фан: ${username}`);
+                        return fanElement;
+                    }
+                }
             }
         }
     }
     
+    console.warn(`⚠️ Фан ${username} не найден на странице`);
     return null;
 }
 
 async function waitForChatPage() {
+    console.log('⏳ Ожидание загрузки чата...');
+    
     return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 20; // Больше попыток
+        
         const checkInterval = setInterval(() => {
-            if (window.location.href.includes('/my/chats/chat/')) {
-                const messageForm = document.querySelector('.b-chat__message-form textarea');
-                if (messageForm) {
-                    clearInterval(checkInterval);
-                    resolve();
+            attempts++;
+            
+            // Проверяем разные варианты URL чата
+            const chatURLPatterns = [
+                '/my/chats/chat/',
+                '/chats/',
+                '/messages/'
+            ];
+            
+            const isChatPage = chatURLPatterns.some(pattern => 
+                window.location.href.includes(pattern)
+            );
+            
+            if (isChatPage) {
+                // Пробуем разные селекторы для поля ввода
+                const inputSelectors = [
+                    '.b-chat__message-form textarea',
+                    'textarea[placeholder*="message"]',
+                    'textarea[placeholder*="сообщение"]',
+                    '.message-input',
+                    'textarea'
+                ];
+                
+                for (const selector of inputSelectors) {
+                    const messageForm = document.querySelector(selector);
+                    if (messageForm && messageForm.offsetParent !== null) {
+                        clearInterval(checkInterval);
+                        console.log(`✅ Чат загружен, найдено поле: ${selector}`);
+                        resolve();
+                        return;
+                    }
                 }
             }
-        }, 200);
-        
-        setTimeout(() => {
-            clearInterval(checkInterval);
-            reject(new Error('Тайм-аут загрузки чата'));
-        }, 8000);
+            
+            if (attempts >= maxAttempts) {
+                clearInterval(checkInterval);
+                console.error('❌ Тайм-аут загрузки чата');
+                reject(new Error('Тайм-аут загрузки чата'));
+            }
+        }, 500); // Проверяем каждые 500ms
     });
 }
 
 async function typeAndSendMessage(message) {
-    const messageInput = document.querySelector('.b-chat__message-form textarea');
-    const sendButton = document.querySelector('.b-chat__message-form [type="submit"]');
+    console.log('⌨️ Отправка сообщения:', message);
     
+    // Пробуем разные селекторы для поля ввода
+    const inputSelectors = [
+        '.b-chat__message-form textarea',
+        'textarea[placeholder*="message"]',
+        'textarea[placeholder*="сообщение"]', 
+        '.message-input',
+        'textarea'
+    ];
+    
+    let messageInput = null;
+    for (const selector of inputSelectors) {
+        messageInput = document.querySelector(selector);
+        if (messageInput && messageInput.offsetParent !== null) {
+            console.log(`✅ Найдено поле ввода: ${selector}`);
+            break;
+        }
+    }
+    
+    if (!messageInput) {
+        throw new Error('Поле ввода сообщения не найдено');
+    }
+    
+    // Пробуем разные селекторы для кнопки отправки
+    const buttonSelectors = [
+        '.b-chat__message-form [type="submit"]',
+        'button[type="submit"]',
+        '.send-button',
+        'button[aria-label*="send"]',
+        'button[aria-label*="отправить"]'
+    ];
+    
+    let sendButton = null;
+    for (const selector of buttonSelectors) {
+        sendButton = document.querySelector(selector);
+        if (sendButton && sendButton.offsetParent !== null) {
+            console.log(`✅ Найдена кнопка отправки: ${selector}`);
+            break;
+        }
+    }
+    
+    if (!sendButton) {
+        throw new Error('Кнопка отправки не найдена');
+    }
+    
+    // Отправляем сообщение
     messageInput.focus();
     messageInput.value = message;
     messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+    messageInput.dispatchEvent(new Event('change', { bubbles: true }));
     
-    await delay(300);
-    sendButton.click();
     await delay(500);
+    sendButton.click();
+    await delay(1000);
+    
+    console.log('✅ Сообщение отправлено');
 }
 
 async function checkPageType() {
