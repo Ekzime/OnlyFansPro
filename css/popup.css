@@ -222,7 +222,6 @@ body {
     border-radius: 3px;
     outline: none;
     -webkit-appearance: none;
-    appearance: none;
 }
 
 .range-input::-webkit-slider-thumb {
@@ -464,6 +463,115 @@ body {
 }
 
 .log-content::-webkit-scrollbar-thumb {
+    background: #667eea;
+    border-radius: 2px;
+}
+
+/* История сообщений */
+.history-section {
+    background: white;
+}
+
+.history-details {
+    border-top: 1px solid #e9ecef;
+}
+
+.history-summary {
+    padding: 16px 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+    user-select: none;
+}
+
+.history-summary:hover {
+    background: #f8f9fa;
+}
+
+.history-content {
+    padding: 0 20px 16px;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #f8f9fa;
+}
+
+.history-entry {
+    background: white;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.history-entry:last-child {
+    margin-bottom: 0;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.history-time {
+    color: #6c757d;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.history-recipient {
+    color: #667eea;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: monospace;
+}
+
+.history-status {
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.history-status.success {
+    color: #2ed573;
+}
+
+.history-status.error {
+    color: #ff4757;
+}
+
+.history-status.pending {
+    color: #ffa502;
+}
+
+.history-message {
+    color: #333;
+    font-size: 12px;
+    line-height: 1.4;
+    background: #f8f9fa;
+    padding: 8px;
+    border-radius: 6px;
+    border-left: 3px solid #667eea;
+}
+
+.empty-history {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Скроллбар для истории */
+.history-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.history-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.history-content::-webkit-scrollbar-thumb {
     background: #667eea;
     border-radius: 2px;
 } 

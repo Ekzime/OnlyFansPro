@@ -32,8 +32,24 @@ async function initializeInterface() {
     
     if (intervalRange && rangeValue) {
         intervalRange.addEventListener('input', () => {
-            rangeValue.textContent = `${intervalRange.value} мин`;
+            const seconds = parseInt(intervalRange.value);
+            rangeValue.textContent = formatTimeInterval(seconds);
         });
+    }
+}
+
+// Функция для красивого отображения интервала времени
+function formatTimeInterval(seconds) {
+    if (seconds < 60) {
+        return `${seconds} сек`;
+    } else if (seconds < 3600) {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return remainingSeconds > 0 ? `${minutes} мин ${remainingSeconds} сек` : `${minutes} мин`;
+    } else {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return minutes > 0 ? `${hours} ч ${minutes} мин` : `${hours} ч`;
     }
 }
 
@@ -186,7 +202,7 @@ function applySettings(settings) {
     if (intervalRange && settings.interval) {
         intervalRange.value = settings.interval;
         if (rangeValue) {
-            rangeValue.textContent = `${settings.interval} мин`;
+            rangeValue.textContent = formatTimeInterval(settings.interval);
         }
     }
     
