@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Фон -->
+  <rect width="128" height="128" rx="24" ry="24" fill="url(#grad1)"/>
+  
+  <!-- Конверт -->
+  <g transform="translate(20, 30)">
+    <!-- Основа конверта -->
+    <rect x="8" y="20" width="72" height="48" rx="4" ry="4" fill="#ffffff" stroke="none"/>
+    
+    <!-- Верхняя часть конверта -->
+    <path d="M8 20 L44 44 L80 20 Z" fill="#f8f9fa" stroke="none"/>
+    
+    <!-- Линии сообщения -->
+    <rect x="16" y="32" width="56" height="2" rx="1" fill="#e9ecef"/>
+    <rect x="16" y="40" width="40" height="2" rx="1" fill="#e9ecef"/>
+    <rect x="16" y="48" width="48" height="2" rx="1" fill="#e9ecef"/>
+    
+    <!-- Сердечко -->
+    <g transform="translate(60, 52)">
+      <path d="M12 5.5c-3.5-3.5-9.5-1.5-9.5 3.5 0 4.5 9.5 11.5 9.5 11.5s9.5-7 9.5-11.5c0-5-6-7-9.5-3.5z" 
+            fill="#ff4757" transform="scale(0.5)"/>
+    </g>
+  </g>
+  
+  <!-- Индикатор уведомления -->
+  <circle cx="96" cy="32" r="12" fill="#2ed573"/>
+  <text x="96" y="36" text-anchor="middle" fill="white" font-family="Arial" font-size="14" font-weight="bold">!</text>
+</svg> 

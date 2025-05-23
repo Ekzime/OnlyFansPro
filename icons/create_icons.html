@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Icon Generator</title>
+</head>
+<body>
+    <canvas id="canvas16" width="16" height="16"></canvas>
+    <canvas id="canvas32" width="32" height="32"></canvas>
+    <canvas id="canvas48" width="48" height="48"></canvas>
+    <canvas id="canvas128" width="128" height="128"></canvas>
+    
+    <script>
+        // Простая функция для создания иконок программно
+        function createIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            
+            // Градиентный фон
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            
+            // Скругленный прямоугольник фона
+            ctx.fillStyle = gradient;
+            ctx.roundRect(0, 0, size, size, size * 0.2);
+            ctx.fill();
+            
+            // Белый конверт
+            const scale = size / 128;
+            ctx.fillStyle = '#ffffff';
+            ctx.roundRect(size * 0.2, size * 0.3, size * 0.6, size * 0.4, size * 0.05);
+            ctx.fill();
+            
+            // Треугольник конверта
+            ctx.fillStyle = '#f8f9fa';
+            ctx.beginPath();
+            ctx.moveTo(size * 0.2, size * 0.3);
+            ctx.lineTo(size * 0.5, size * 0.5);
+            ctx.lineTo(size * 0.8, size * 0.3);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Индикатор уведомления
+            ctx.fillStyle = '#2ed573';
+            ctx.beginPath();
+            ctx.arc(size * 0.75, size * 0.25, size * 0.08, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Создаем иконки разных размеров
+        ['16', '32', '48', '128'].forEach(size => {
+            const canvas = document.getElementById(`canvas${size}`);
+            createIcon(canvas, parseInt(size));
+            
+            // Создаем ссылку для скачивания
+            const link = document.createElement('a');
+            link.download = `icon${size}.png`;
+            link.href = canvas.toDataURL();
+            link.textContent = `Скачать icon${size}.png`;
+            link.style.display = 'block';
+            link.style.margin = '10px';
+            document.body.appendChild(link);
+        });
+        
+        // Автоматически скачиваем все иконки
+        setTimeout(() => {
+            document.querySelectorAll('a').forEach(link => {
+                // Раскомментируйте для автоскачивания:
+                // link.click();
+            });
+        }, 100);
+    </script>
+    
+    <h3>Инструкция:</h3>
+    <p>1. Откройте этот файл в браузере</p>
+    <p>2. Нажмите на ссылки для скачивания PNG файлов</p>
+    <p>3. Сохраните файлы в папку icons/</p>
+</body>
+</html> 

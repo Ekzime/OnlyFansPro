@@ -1,0 +1,63 @@
+/* Стили для интеграции с OnlyFans */
+
+/* Подсветка активных фанатов */
+.of-manager-highlight {
+    border: 2px solid #667eea !important;
+    border-radius: 8px !important;
+    position: relative;
+}
+
+/* Индикатор обработанного фаната */
+.of-manager-processed {
+    opacity: 0.6;
+    filter: grayscale(50%);
+}
+
+.of-manager-processed::after {
+    content: '✓';
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: #2ed573;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 1000;
+}
+
+/* Счетчик очереди */
+.of-manager-queue-counter {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Анимация отправки */
+.of-manager-sending {
+    animation: ofManagerPulse 1s infinite;
+}
+
+@keyframes ofManagerPulse {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4);
+    }
+    50% { 
+        transform: scale(1.02);
+        box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+    }
+} 

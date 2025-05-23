@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnlyFans Manager Pro</title>
+    <link rel="stylesheet" href="../css/popup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Заголовок -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">💌</span>
+                <h1>OF Manager Pro</h1>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot offline"></div>
+                <span class="status-text">Остановлено</span>
+            </div>
+        </header>
+
+        <!-- Статистика -->
+        <section class="stats-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">Онлайн фанатов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">Отправлено сегодня</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">В очереди</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Текст сообщения -->
+        <section class="message-section">
+            <label class="input-label">
+                <span class="label-text">💬 Текст сообщения</span>
+                <textarea 
+                    class="message-input" 
+                    placeholder="Привет, {name}! Как дела? 😊"
+                    rows="3"
+                    maxlength="500"
+                ></textarea>
+                <div class="char-counter">
+                    <span class="current-chars">0</span>/<span class="max-chars">500</span>
+                </div>
+            </label>
+            
+            <div class="template-variables">
+                <span class="variables-label">Доступные переменные:</span>
+                <div class="variables-list">
+                    <span class="variable">{name}</span>
+                    <span class="variable">{time}</span>
+                    <span class="variable">{emoji}</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Настройки -->
+        <section class="settings-section">
+            <h3 class="section-title">⚙️ Настройки рассылки</h3>
+            
+            <div class="setting-item">
+                <label class="setting-label">
+                    <span class="setting-name">Интервал между сообщениями</span>
+                    <div class="range-input-wrapper">
+                        <input type="range" class="range-input" min="5" max="60" value="20" id="interval-range">
+                        <span class="range-value">20 мин</span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="setting-item">
+                <label class="setting-label">
+                    <span class="setting-name">Рабочие часы</span>
+                    <div class="time-inputs">
+                        <input type="time" class="time-input" value="10:00">
+                        <span class="time-separator">-</span>
+                        <input type="time" class="time-input" value="22:00">
+                    </div>
+                </label>
+            </div>
+
+            <div class="setting-item">
+                <label class="checkbox-label">
+                    <input type="checkbox" class="checkbox" checked>
+                    <span class="checkbox-custom"></span>
+                    <span class="setting-name">Только онлайн фанаты</span>
+                </label>
+            </div>
+
+            <div class="setting-item">
+                <label class="checkbox-label">
+                    <input type="checkbox" class="checkbox">
+                    <span class="checkbox-custom"></span>
+                    <span class="setting-name">Случайные задержки</span>
+                </label>
+            </div>
+        </section>
+
+        <!-- Управление -->
+        <section class="controls-section">
+            <div class="control-buttons">
+                <button class="btn btn-primary" id="start-btn">
+                    <span class="btn-icon">▶️</span>
+                    <span class="btn-text">Запустить</span>
+                </button>
+                <button class="btn btn-secondary" id="pause-btn" disabled>
+                    <span class="btn-icon">⏸️</span>
+                    <span class="btn-text">Пауза</span>
+                </button>
+                <button class="btn btn-danger" id="stop-btn" disabled>
+                    <span class="btn-icon">⏹️</span>
+                    <span class="btn-text">Стоп</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Следующая отправка -->
+        <section class="next-message-section">
+            <div class="next-message-info">
+                <span class="next-label">⏰ Следующее сообщение:</span>
+                <span class="next-time">Не запланировано</span>
+            </div>
+        </section>
+
+        <!-- Лог активности -->
+        <section class="log-section">
+            <details class="log-details">
+                <summary class="log-summary">📋 Лог активности</summary>
+                <div class="log-content">
+                    <div class="log-entry">
+                        <span class="log-time">12:30</span>
+                        <span class="log-message">Расширение запущено</span>
+                    </div>
+                    <div class="log-entry">
+                        <span class="log-time">12:31</span>
+                        <span class="log-message">Найдено 23 онлайн фаната</span>
+                    </div>
+                </div>
+            </details>
+        </section>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="../js/popup.js"></script>
+</body>
+</html> 

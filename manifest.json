@@ -1,0 +1,55 @@
+{
+  "manifest_version": 3,
+  "name": "OnlyFans Manager Pro",
+  "version": "1.0.0",
+  "description": "Автоматизация работы с фанатами на OnlyFans - умная рассылка сообщений",
+  
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "notifications",
+    "alarms"
+  ],
+  
+  "host_permissions": [
+    "https://onlyfans.com/*"
+  ],
+  
+  "background": {
+    "service_worker": "js/background.js"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["https://onlyfans.com/*"],
+      "js": ["js/content.js"],
+      "css": ["css/content.css"]
+    }
+  ],
+  
+  "action": {
+    "default_popup": "html/popup.html",
+    "default_title": "OnlyFans Manager Pro",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["css/*", "icons/*"],
+      "matches": ["https://onlyfans.com/*"]
+    }
+  ]
+}
