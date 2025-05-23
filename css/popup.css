@@ -562,6 +562,13 @@ body {
     font-style: italic;
 }
 
+.empty-log {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+    font-style: italic;
+}
+
 /* Скроллбар для истории */
 .history-content::-webkit-scrollbar {
     width: 4px;
