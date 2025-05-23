@@ -1,38 +1,18 @@
 // Content Script для OnlyFans Manager Pro
-// Парсер фанатов и автоматизация сообщений
+// БЕЗОПАСНЫЙ режим - минимальная активность при включении
 
-console.log('🎯 OnlyFans Manager Pro - Content script активирован');
+console.log('🎯 OnlyFans Manager Pro - Content script загружен');
 
 // Глобальные переменные
-let lastScanTime = 0;
-let scanInProgress = false;
-let observerActive = false;
-let retryAttempts = 0;
-const MAX_RETRY_ATTEMPTS = 3;
+let authToken = null;
+let userAgent = null;
+let isInitialized = false;
 
-// Настройки для работы с DOM
-const SELECTORS = {
-    // Контейнеры фанатов
-    fanContainer: '.b-fans__container',
-    fanItems: '.b-users__item.m-fans',
-    
-    // Информация о пользователе
-    userAvatar: '.g-avatar',
-    userName: '[at-attr="custom_name"]',
-    userHandle: '[at-attr="user_link"] .g-user-username',
-    onlineStatus: '.online_status_class.online',
-    
-    // Кнопки и ссылки
-    messageButton: 'a[href*="/my/chats/chat/"]',
-    userProfileLink: 'a[href*="onlyfans.com/"][href*="/my/chats/chat/"]:not([href*="/my/chats/chat/"])',
-    
-    // Модальные окна и текстовые поля
-    messageModal: '.b-chat__message-form',
-    messageInput: '.b-chat__message-form textarea',
-    sendButton: '.b-chat__message-form [type="submit"]',
-    
-    // Индикаторы загрузки
-    loadingIndicator: '.infinite-loading-container'
+// API endpoints OnlyFans
+const API_ENDPOINTS = {
+    sendMessage: '/api2/v2/chats/sendMessage',
+    getUser: '/api2/v2/users/profile',
+    getChatId: '/api2/v2/chats/getChatId'
 };
 
 // Основной обработчик сообщений от background script
@@ -49,7 +29,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             sendResponse({ success: false, error: error.message });
         });
     
-    return true; // Для асинхронного ответа
+    return true;
 });
 
 // Обработчик сообщений
@@ -59,7 +39,7 @@ async function handleMessage(message) {
             return await scanFans();
             
         case 'SEND_MESSAGE':
-            return await sendMessageToFan(message.data);
+            return await sendMessageAPI(message.data);
             
         case 'CHECK_PAGE':
             return await checkPageType();
@@ -69,221 +49,155 @@ async function handleMessage(message) {
     }
 }
 
-// Проверка типа страницы
-async function checkPageType() {
-    const url = window.location.href;
-    const isFansPage = url.includes('/collections/user-lists/subscribers');
-    const isChatPage = url.includes('/my/chats');
+// БЕЗОПАСНАЯ инициализация API (только при необходимости)
+async function initializeAPIWhenNeeded() {
+    if (authToken) return true; // Уже инициализирован
     
-    return {
-        success: true,
-        pageType: isFansPage ? 'fans' : isChatPage ? 'chat' : 'other',
-        url: url
-    };
-}
-
-// Основная функция сканирования фанатов
-async function scanFans() {
-    console.log('🔍 Начинаем сканирование фанатов...');
-    
-    if (scanInProgress) {
-        console.log('⏳ Сканирование уже в процессе');
-        return { success: false, error: 'Сканирование уже выполняется' };
-    }
-    
-    scanInProgress = true;
+    console.log('🔐 Инициализация API по требованию...');
     
     try {
-        // Проверяем, что мы на правильной странице
-        if (!window.location.href.includes('/collections/user-lists/subscribers')) {
-            throw new Error('Не находимся на странице фанатов');
+        // Безопасно пытаемся найти токен
+        authToken = await findAuthTokenSafely();
+        userAgent = navigator.userAgent;
+        
+        if (authToken) {
+            console.log('✅ API токен найден');
+            return true;
+        } else {
+            console.log('ℹ️ API токен не найден, будем использовать DOM метод');
+            return false;
         }
         
-        // Ждем загрузки страницы
-        await waitForPageLoad();
+    } catch (error) {
+        console.warn('⚠️ Не удалось найти API токен:', error.message);
+        return false;
+    }
+}
+
+// БЕЗОПАСНЫЙ поиск токена (не агрессивный)
+async function findAuthTokenSafely() {
+    try {
+        // Сначала проверяем очевидные места
+        let token = localStorage.getItem('auth_token') || 
+                   sessionStorage.getItem('auth_token');
         
-        // Прокручиваем страницу для загрузки всех фанатов
-        await scrollToLoadAllFans();
+        if (token) return token;
         
-        // Получаем список фанатов
-        const fans = await extractFansData();
+        // Проверяем cookies только если localStorage пуст
+        token = getCookieValue('auth_token') || getCookieValue('session_token');
+        if (token) return token;
         
-        console.log('👥 Найдено фанатов:', fans.length);
+        // В крайнем случае - ищем в window объекте
+        if (window.__INITIAL_STATE__ && window.__INITIAL_STATE__.auth) {
+            return window.__INITIAL_STATE__.auth.token;
+        }
         
-        // Отправляем данные в background script
-        await chrome.runtime.sendMessage({
-            type: 'FANS_FOUND',
-            data: fans
-        });
+        return null;
         
-        lastScanTime = Date.now();
-        retryAttempts = 0;
+    } catch (error) {
+        // Молча игнорируем ошибки - не хотим привлекать внимание
+        return null;
+    }
+}
+
+// Безопасное получение cookie
+function getCookieValue(name) {
+    try {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) {
+            return parts.pop().split(';').shift();
+        }
+        return null;
+    } catch (error) {
+        return null;
+    }
+}
+
+// БЫСТРАЯ ОТПРАВКА через API (только когда нужно)
+async function sendMessageAPI(messageData) {
+    console.log('🚀 Попытка API отправки:', messageData.name);
+    
+    try {
+        // Инициализируем API только сейчас
+        const apiReady = await initializeAPIWhenNeeded();
+        
+        if (!apiReady) {
+            console.log('🔄 API недоступен, переключение на DOM метод');
+            return await sendMessageDOM(messageData);
+        }
+        
+        // Получаем ID чата с пользователем
+        const chatId = await getChatId(messageData.username);
+        
+        // Отправляем сообщение
+        const response = await sendMessageDirectly(chatId, messageData.processedMessage);
+        
+        console.log('✅ Сообщение отправлено через API');
         
         return {
             success: true,
-            fansCount: fans.length,
-            onlineCount: fans.filter(f => f.isOnline).length
+            recipient: messageData.username,
+            message: messageData.processedMessage,
+            method: 'API'
         };
         
     } catch (error) {
-        console.error('❌ Ошибка сканирования:', error);
-        retryAttempts++;
-        
-        if (retryAttempts < MAX_RETRY_ATTEMPTS) {
-            console.log(`🔄 Повторная попытка ${retryAttempts}/${MAX_RETRY_ATTEMPTS}`);
-            await delay(2000);
-            return await scanFans();
-        }
-        
-        throw error;
-    } finally {
-        scanInProgress = false;
+        console.log('🔄 API ошибка, переключение на DOM метод:', error.message);
+        return await sendMessageDOM(messageData);
     }
 }
 
-// Ожидание загрузки страницы
-async function waitForPageLoad() {
-    console.log('⏳ Ожидание загрузки страницы...');
-    
-    return new Promise((resolve, reject) => {
-        const checkLoaded = () => {
-            const container = document.querySelector(SELECTORS.fanContainer);
-            if (container && document.querySelectorAll(SELECTORS.fanItems).length > 0) {
-                console.log('✅ Страница загружена');
-                resolve();
-            } else {
-                setTimeout(checkLoaded, 500);
-            }
-        };
-        
-        checkLoaded();
-        
-        // Таймаут на случай если страница не загрузится
-        setTimeout(() => {
-            reject(new Error('Тайм-аут загрузки страницы'));
-        }, 15000);
+// Получение ID чата
+async function getChatId(username) {
+    const response = await fetch('/api2/v2/chats/getChatId', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+            'User-Agent': userAgent,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            username: username
+        })
     });
-}
-
-// Прокрутка для загрузки всех фанатов
-async function scrollToLoadAllFans() {
-    console.log('📜 Прокручиваем для загрузки всех фанатов...');
     
-    let lastCount = 0;
-    let stableCount = 0;
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    while (stableCount < 3 && attempts < maxAttempts) {
-        const currentCount = document.querySelectorAll(SELECTORS.fanItems).length;
-        
-        if (currentCount === lastCount) {
-            stableCount++;
-        } else {
-            stableCount = 0;
-            lastCount = currentCount;
-        }
-        
-        // Прокручиваем вниз
-        window.scrollTo(0, document.body.scrollHeight);
-        
-        // Ждем загрузки новых элементов
-        await delay(1000);
-        
-        attempts++;
-        console.log(`📊 Загружено фанатов: ${currentCount}, попытка: ${attempts}/${maxAttempts}`);
+    if (!response.ok) {
+        throw new Error(`Не удалось получить chat ID: ${response.status}`);
     }
     
-    // Возвращаемся в начало страницы
-    window.scrollTo(0, 0);
-    await delay(500);
-    
-    console.log('✅ Загрузка фанатов завершена');
+    const data = await response.json();
+    return data.chatId || data.id;
 }
 
-// Извлечение данных фанатов
-async function extractFansData() {
-    console.log('📋 Извлекаем данные фанатов...');
+// Прямая отправка сообщения
+async function sendMessageDirectly(chatId, message) {
+    const response = await fetch('/api2/v2/chats/sendMessage', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+            'User-Agent': userAgent,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            chatId: chatId,
+            message: message,
+            type: 'text'
+        })
+    });
     
-    const fanElements = document.querySelectorAll(SELECTORS.fanItems);
-    const fans = [];
-    
-    for (let i = 0; i < fanElements.length; i++) {
-        try {
-            const fanElement = fanElements[i];
-            const fanData = await extractSingleFanData(fanElement);
-            
-            if (fanData) {
-                fans.push(fanData);
-            }
-        } catch (error) {
-            console.warn('⚠️ Ошибка извлечения данных фаната:', error);
-        }
+    if (!response.ok) {
+        throw new Error(`Ошибка отправки: ${response.status}`);
     }
     
-    return fans;
+    return await response.json();
 }
 
-// Извлечение данных одного фаната
-async function extractSingleFanData(fanElement) {
-    const nameElement = fanElement.querySelector(SELECTORS.userName);
-    const handleElement = fanElement.querySelector(SELECTORS.userHandle);
-    const avatarElement = fanElement.querySelector(SELECTORS.userAvatar);
-    const isOnline = fanElement.querySelector(SELECTORS.onlineStatus) !== null;
-    
-    // Извлекаем имя
-    const name = nameElement ? nameElement.textContent.trim() : 'Unknown';
-    
-    // Извлекаем username (убираем @)
-    let username = 'unknown';
-    if (handleElement) {
-        username = handleElement.textContent.trim().replace('@', '');
-    } else {
-        // Пытаемся извлечь из ссылки на профиль
-        const profileLink = fanElement.querySelector('a[href*="onlyfans.com/"]');
-        if (profileLink) {
-            const href = profileLink.getAttribute('href');
-            const match = href.match(/onlyfans\.com\/([^\/\?]+)/);
-            if (match) {
-                username = match[1];
-            }
-        }
-    }
-    
-    // Извлекаем URL аватара
-    let avatarUrl = null;
-    if (avatarElement) {
-        const imgElement = avatarElement.querySelector('img');
-        if (imgElement) {
-            avatarUrl = imgElement.getAttribute('src');
-        }
-    }
-    
-    // Проверяем недавнюю активность (если есть индикаторы)
-    const recentlyOnline = checkRecentActivity(fanElement);
-    
-    return {
-        name: name,
-        username: username,
-        isOnline: isOnline,
-        recentlyOnline: recentlyOnline,
-        avatarUrl: avatarUrl,
-        profileUrl: `https://onlyfans.com/${username}`,
-        lastSeen: isOnline ? Date.now() : null
-    };
-}
-
-// Проверка недавней активности (эвристика)
-function checkRecentActivity(fanElement) {
-    // Логика для определения недавней активности
-    // Можно расширить на основе дополнительных индикаторов в DOM
-    const hasRecentIndicators = fanElement.querySelector('.recent-activity') !== null;
-    return hasRecentIndicators;
-}
-
-// Отправка сообщения фанату
-async function sendMessageToFan(messageData) {
-    console.log('💌 Отправляем сообщение фанату:', messageData.name);
+// Fallback DOM метод (безопасный)
+async function sendMessageDOM(messageData) {
+    console.log('🐌 DOM отправка сообщения:', messageData.name);
     
     try {
         // Находим фанта на странице
@@ -294,7 +208,7 @@ async function sendMessageToFan(messageData) {
         }
         
         // Кликаем на кнопку сообщения
-        const messageButton = fanElement.querySelector(SELECTORS.messageButton);
+        const messageButton = fanElement.querySelector('a[href*="/my/chats/chat/"]');
         if (!messageButton) {
             throw new Error('Кнопка сообщения не найдена');
         }
@@ -308,26 +222,140 @@ async function sendMessageToFan(messageData) {
         // Отправляем сообщение
         await typeAndSendMessage(messageData.processedMessage);
         
-        console.log('✅ Сообщение отправлено успешно');
+        // Возвращаемся к списку фанатов
+        window.history.back();
+        await delay(1000);
+        
+        console.log('✅ Сообщение отправлено через DOM');
         
         return {
             success: true,
             recipient: messageData.username,
-            message: messageData.processedMessage
+            message: messageData.processedMessage,
+            method: 'DOM'
         };
         
     } catch (error) {
-        console.error('❌ Ошибка отправки сообщения:', error);
+        console.error('❌ Ошибка DOM отправки:', error);
         throw error;
     }
 }
 
-// Поиск элемента фаната на странице
+// БЕЗОПАСНОЕ сканирование фанатов
+async function scanFans() {
+    console.log('🔍 Сканирование фанатов...');
+    
+    try {
+        // Проверяем, что мы на правильной странице
+        if (!window.location.href.includes('/collections/user-lists/subscribers')) {
+            throw new Error('Не находимся на странице фанатов');
+        }
+        
+        // Безопасная загрузка фанатов
+        await loadAllFansSafely();
+        
+        // Извлекаем данные
+        const fans = await extractFansData();
+        
+        console.log('👥 Найдено фанатов:', fans.length);
+        
+        // Отправляем данные в background script
+        await chrome.runtime.sendMessage({
+            type: 'FANS_FOUND',
+            data: fans
+        });
+        
+        return {
+            success: true,
+            fansCount: fans.length,
+            onlineCount: fans.filter(f => f.isOnline).length
+        };
+        
+    } catch (error) {
+        console.error('❌ Ошибка сканирования:', error);
+        throw error;
+    }
+}
+
+// Безопасная загрузка всех фанатов
+async function loadAllFansSafely() {
+    console.log('⚡ Загрузка фанатов...');
+    
+    let lastCount = 0;
+    let attempts = 0;
+    const maxAttempts = 15; // Меньше попыток для безопасности
+    
+    while (attempts < maxAttempts) {
+        const currentCount = document.querySelectorAll('.b-users__item.m-fans').length;
+        
+        if (currentCount > lastCount) {
+            lastCount = currentCount;
+            attempts = 0;
+        } else {
+            attempts++;
+        }
+        
+        // Плавная прокрутка
+        window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: 'smooth'
+        });
+        
+        await delay(200); // Более длинная задержка для безопасности
+        
+        console.log(`📊 Загружено: ${currentCount}`);
+    }
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    console.log('✅ Загрузка завершена');
+}
+
+// Простое извлечение данных
+async function extractFansData() {
+    const fanElements = document.querySelectorAll('.b-users__item.m-fans');
+    const fans = [];
+    
+    fanElements.forEach(fanElement => {
+        try {
+            const nameElement = fanElement.querySelector('[at-attr="custom_name"]');
+            const handleElement = fanElement.querySelector('[at-attr="user_link"] .g-user-username');
+            const isOnline = fanElement.querySelector('.online_status_class.online') !== null;
+            
+            const name = nameElement ? nameElement.textContent.trim() : 'Unknown';
+            let username = 'unknown';
+            
+            if (handleElement) {
+                username = handleElement.textContent.trim().replace('@', '');
+            }
+            
+            fans.push({
+                name: name,
+                username: username,
+                isOnline: isOnline,
+                recentlyOnline: false,
+                avatarUrl: null,
+                profileUrl: `https://onlyfans.com/${username}`,
+                lastSeen: isOnline ? Date.now() : null
+            });
+            
+        } catch (error) {
+            // Молча игнорируем ошибки отдельных элементов
+        }
+    });
+    
+    return fans;
+}
+
+// Вспомогательные функции
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function findFanElement(username) {
-    const fanElements = document.querySelectorAll(SELECTORS.fanItems);
+    const fanElements = document.querySelectorAll('.b-users__item.m-fans');
     
     for (const fanElement of fanElements) {
-        const handleElement = fanElement.querySelector(SELECTORS.userHandle);
+        const handleElement = fanElement.querySelector('[at-attr="user_link"] .g-user-username');
         if (handleElement) {
             const fanUsername = handleElement.textContent.trim().replace('@', '');
             if (fanUsername === username) {
@@ -339,169 +367,70 @@ async function findFanElement(username) {
     return null;
 }
 
-// Ожидание загрузки страницы чата
 async function waitForChatPage() {
-    console.log('⏳ Ожидание загрузки чата...');
-    
     return new Promise((resolve, reject) => {
         const checkInterval = setInterval(() => {
             if (window.location.href.includes('/my/chats/chat/')) {
-                const messageForm = document.querySelector(SELECTORS.messageInput);
+                const messageForm = document.querySelector('.b-chat__message-form textarea');
                 if (messageForm) {
                     clearInterval(checkInterval);
-                    console.log('✅ Страница чата загружена');
                     resolve();
                 }
             }
-        }, 500);
+        }, 200);
         
         setTimeout(() => {
             clearInterval(checkInterval);
             reject(new Error('Тайм-аут загрузки чата'));
-        }, 10000);
+        }, 8000);
     });
 }
 
-// Ввод и отправка сообщения
 async function typeAndSendMessage(message) {
-    console.log('⌨️ Вводим сообщение:', message);
+    const messageInput = document.querySelector('.b-chat__message-form textarea');
+    const sendButton = document.querySelector('.b-chat__message-form [type="submit"]');
     
-    // Находим поле ввода
-    const messageInput = document.querySelector(SELECTORS.messageInput);
-    if (!messageInput) {
-        throw new Error('Поле ввода сообщения не найдено');
-    }
-    
-    // Имитируем ввод текста
     messageInput.focus();
     messageInput.value = message;
-    
-    // Генерируем события клавиатуры
     messageInput.dispatchEvent(new Event('input', { bubbles: true }));
-    messageInput.dispatchEvent(new Event('change', { bubbles: true }));
     
-    await delay(500);
-    
-    // Находим и кликаем кнопку отправки
-    const sendButton = document.querySelector(SELECTORS.sendButton);
-    if (!sendButton) {
-        throw new Error('Кнопка отправки не найдена');
-    }
-    
-    console.log('📤 Нажимаем кнопку отправки...');
+    await delay(300);
     sendButton.click();
-    
-    // Ждем отправки
-    await delay(1000);
-    
-    // Проверяем, что сообщение отправлено (поле очистилось)
-    if (messageInput.value !== '') {
-        throw new Error('Сообщение не было отправлено');
-    }
-    
-    console.log('✅ Сообщение отправлено');
+    await delay(500);
 }
 
-// Наблюдатель за изменениями DOM
-function startDOMObserver() {
-    if (observerActive) return;
+async function checkPageType() {
+    const url = window.location.href;
+    const isFansPage = url.includes('/collections/user-lists/subscribers');
     
-    console.log('👀 Запускаем наблюдатель DOM...');
-    
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.type === 'childList') {
-                // Проверяем появление новых фанатов
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        const newFans = node.querySelectorAll && node.querySelectorAll(SELECTORS.fanItems);
-                        if (newFans && newFans.length > 0) {
-                            console.log('👥 Обнаружены новые фанаты:', newFans.length);
-                            // Можно добавить логику для обработки новых фанатов
-                        }
-                    }
-                });
-            }
-        });
-    });
-    
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
-    
-    observerActive = true;
+    return {
+        success: true,
+        pageType: isFansPage ? 'fans' : 'other',
+        url: url
+    };
 }
 
-// Утилитарные функции
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function getRandomDelay(min = 500, max = 2000) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-// Имитация человеческого поведения
-async function humanDelay() {
-    const delayTime = getRandomDelay(800, 2500);
-    console.log(`⏰ Пауза для имитации человеческого поведения: ${delayTime}ms`);
-    await delay(delayTime);
-}
-
-// Проверка анти-бот защиты
-function checkForAntiBot() {
-    const suspiciousElements = [
-        'captcha',
-        'recaptcha',
-        'cloudflare',
-        'bot-detection',
-        'anti-bot'
-    ];
+// БЕЗОПАСНАЯ инициализация
+async function initialize() {
+    console.log('🚀 OnlyFans Manager Pro готов к работе');
     
-    for (const element of suspiciousElements) {
-        if (document.querySelector(`[class*="${element}"], [id*="${element}"]`)) {
-            console.warn('⚠️ Обнаружены элементы анти-бот защиты');
-            return true;
-        }
-    }
+    // НЕ ИЗВЛЕКАЕМ ТОКЕНЫ ПРИ ИНИЦИАЛИЗАЦИИ!
+    // Только сообщаем что готовы к работе
     
-    return false;
-}
-
-// Инициализация content script
-function initialize() {
-    console.log('🚀 Инициализация OnlyFans Manager Pro content script');
-    
-    // Проверяем страницу
-    const pageType = window.location.href.includes('/collections/user-lists/subscribers') ? 'fans' : 'other';
-    console.log('📄 Тип страницы:', pageType);
-    
-    if (pageType === 'fans') {
-        // Запускаем наблюдатель для страницы фанатов
-        startDOMObserver();
-        
-        // Уведомляем background script о готовности
+    if (window.location.href.includes('/collections/user-lists/subscribers')) {
         chrome.runtime.sendMessage({
             type: 'CONTENT_READY',
             data: { pageType: 'fans' }
-        }).catch(() => {
-            // Background script может быть не готов - игнорируем
-        });
+        }).catch(() => {});
     }
+    
+    isInitialized = true;
 }
 
-// Запускаем инициализацию после загрузки страницы
+// Безопасный запуск
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initialize);
 } else {
-    initialize();
-}
-
-// Дополнительная проверка через 2 секунды
-setTimeout(() => {
-    if (!observerActive && window.location.href.includes('/collections/user-lists/subscribers')) {
-        console.log('🔄 Повторная инициализация...');
-        initialize();
-    }
-}, 2000); 
+    // Небольшая задержка чтобы не привлекать внимание
+    setTimeout(initialize, 1000);
+} 
